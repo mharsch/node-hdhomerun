@@ -1,6 +1,6 @@
 {
   "name": "hdhomerun",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "low-level control of HDHomeRun TV tuner devices",
   "main": "index.js",
   "directories": {
