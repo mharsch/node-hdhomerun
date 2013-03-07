@@ -1,0 +1,39 @@
+{
+  "name": "hdhomerun",
+  "version": "0.0.1",
+  "description": "low-level control of HDHomeRun TV tuner devices",
+  "main": "index.js",
+  "directories": {
+    "example": "examples",
+    "test": "test"
+  },
+  "bugs": {
+    "url": "http://github.com/mharsch/node-hdhomerun/issues"
+  },
+  "dependencies": {
+    "buffer-crc32": ">=0.2.1"
+  },
+  "engines": {
+    "node": ">=0.9.4"
+  },
+  "devDependencies": {
+    "nodeunit": ">=0.7.4"
+  },
+  "scripts": {
+    "test": "nodeunit ./test/test-discover.js ./test/test-device.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/mharsch/node-hdhomerun.git"
+  },
+  "keywords": [
+    "hdhomerun",
+    "tv",
+    "tuner",
+    "video",
+    "dvr"
+  ],
+  "author": "Michael Harsch <mike@harschsystems.com>",
+  "license": "MIT",
+  "readmeFilename": "README.md"
+}
