@@ -51,8 +51,12 @@ module.exports = function (search_id, cb) {
 	    parseInt(search_id, 16)});
 	disc_pkt = proto.encode_msg(disc_msg);
 
-	sock.send(disc_pkt, 0, disc_pkt.length, 65001, '255.255.255.255',
-	    function (err, bytes) {
-		if (err) throw new Error('problem sending discover req dgram');
+	sock.on('listening', function () {
+		sock.setBroadcast(true);
+		sock.send(disc_pkt, 0, disc_pkt.length, 65001, '255.255.255.255',
+		    function (err, bytes) {
+			if (err) throw new Error('problem sending discover req');
+		});
 	});
+	sock.bind();
 }
