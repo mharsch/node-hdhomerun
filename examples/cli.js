@@ -10,6 +10,7 @@ var util = require('util');
 var fs = require('fs');
 var channelscan = require('./channelscan.js');
 var vidstream = require('./vidstream.js');
+var rtp = require('./rtp-readable.js');
 
 var argv = process.argv;
 var argc = argv.length - 2;
@@ -83,17 +84,23 @@ if (argv[2] == 'discover') {
 			if (argv[4] && argv[5]) {
 				var outfile = fs.createWriteStream(argv[5]);
 				var progress = 0;
-				vidstream.start(device, argv[4]).on('message',
-				    function (msg, rinfo) {
-					outfile.write(msg);
-					if (progress >= 2000000) {
-						progress = 0;
-						util.print('.');
-					} else {
-						progress += msg.length
-					}
+				var sock = vidstream.start(device, argv[4]);
+				var filter;
+
+				sock.once('listening', function () {
+					filter = rtp.createRTPStream(sock);
+					filter.pipe(outfile);
+					filter.on('error', function (err) {
+						util.print('n');
+					});
 				});
+
+				var progress = setInterval(function () {
+					util.print('.');
+				}, 1000);
+
 				process.on('SIGINT', function () {
+					clearInterval(progress);
 					vidstream.stop(device, argv[4],
 					    function () {
 						outfile.end();

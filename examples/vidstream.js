@@ -13,7 +13,7 @@ function start(device, tuner) {
 		var addr = device.control_sock.localAddress;
 		var port = sock.address().port;
 		var name = util.format('/tuner%d/target', tuner);
-		var value = util.format('udp://%s:%d', addr, port);
+		var value = util.format('rtp://%s:%d', addr, port);
 		device.set(name, value, function (err, res) {
 			if (err) throw err;
 
@@ -27,6 +27,7 @@ function start(device, tuner) {
 function stop(device, tuner, cb) {
 	device.set('/tuner' + tuner + '/target', 'none',
 	    function (err, res) {
+		sock.close();
 		cb();
 	});
 }
