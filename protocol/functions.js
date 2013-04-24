@@ -1,55 +1,15 @@
 var crc = require('buffer-crc32');
+var proto = require('./protocol.js');
+var assert = require('assert');
 
 module.exports = {
-	decode_pkt: decode_pkt,
 	encode_msg: encode_msg,
-	gen_msg: gen_msg
+	decode_pkt: decode_pkt
 };
 
-// these come from libhdhomerun/hdhomerun_pkt.h
-HDHOMERUN_TYPE_DISCOVER_REQ = 0x0002
-HDHOMERUN_TYPE_DISCOVER_RPY = 0x0003
-HDHOMERUN_TYPE_GETSET_REQ = 0x0004
-HDHOMERUN_TYPE_GETSET_RPY = 0x0005
-HDHOMERUN_TAG_DEVICE_TYPE = 0x01
-HDHOMERUN_TAG_DEVICE_ID = 0x02
-HDHOMERUN_TAG_GETSET_NAME = 0x03
-HDHOMERUN_TAG_GETSET_VALUE = 0x04
-HDHOMERUN_TAG_GETSET_LOCKKEY = 0x15
-HDHOMERUN_TAG_ERROR_MESSAGE = 0x05
-HDHOMERUN_TAG_TUNER_COUNT = 0x10
-HDHOMERUN_DEVICE_TYPE_WILDCARD = 0xFFFFFFFF
-HDHOMERUN_DEVICE_TYPE_TUNER = 0x00000001
-HDHOMERUN_DEVICE_ID_WILDCARD = 0xFFFFFFFF
-
-// shorthand versions of the above constants
-var types = {
-	disc_req: HDHOMERUN_TYPE_DISCOVER_REQ,
-	disc_rpy: HDHOMERUN_TYPE_DISCOVER_RPY,
-	getset_req: HDHOMERUN_TYPE_GETSET_REQ,
-	getset_rpy: HDHOMERUN_TYPE_GETSET_RPY
-}
-
-var tags = {
-	device_type: { value: HDHOMERUN_TAG_DEVICE_TYPE, size: 4 },
-	device_id: { value: HDHOMERUN_TAG_DEVICE_ID, size: 4 },
-	getset_name: { value: HDHOMERUN_TAG_GETSET_NAME, size: undefined },
-	getset_value: { value: HDHOMERUN_TAG_GETSET_VALUE, size: undefined },
-	getset_lockkey: { value: HDHOMERUN_TAG_GETSET_LOCKKEY, size: 4 },
-	error_message: { value: HDHOMERUN_TAG_ERROR_MESSAGE, size: undefined },
-	tuner_count: { value: HDHOMERUN_TAG_TUNER_COUNT, size: 1 }
-}
-
-var dev_values = {
-	device_type_tuner: HDHOMERUN_DEVICE_TYPE_TUNER,
-	device_type_any: HDHOMERUN_DEVICE_TYPE_WILDCARD,
-	device_id_any: HDHOMERUN_DEVICE_ID_WILDCARD
-}
-
 function encode_msg(msg) {
-	// XXX: need some kind of error handling here
 
-	var pkt = new Buffer(3072); // max buffer size from libhdhomerun
+	var pkt = new Buffer(proto.MAX_BUFSIZE);
 	var pos = 0;
 
 	pkt.writeUInt16BE(msg.type, 0);  pos += 2;
@@ -76,17 +36,26 @@ function encode_msg(msg) {
 }
 
 
-function decode_pkt(pkt) {
+function decode_pkt(pkt, msg) {
+	if (pkt.length < proto.HEADER_LEN)
+		return (false);
+
+	var pos = msg._offset || 0;
+
+	if (pos == 0) {
+		msg.type = pkt.readUInt16BE(pos); pos += 2;
+		msg.len = pkt.readUInt16BE(pos); pos += 2;
+	}
+
+	var remain = pos + msg.len + 4;
+	if (pkt.length < remain) {
+		msg._offset = pos;	
+		return (false);
+	}
+
+	var tags = proto.tags;
 	var tag, tag_len, tag_val;
-	var pos = 0;
-	var msg = {};
-
-	var pkt_type = pkt.readUInt16BE(pos); pos += 2;
-	var pkt_len = pkt.readUInt16BE(pos); pos += 2;
-
-	msg.type = pkt_type;
-
-	while (pos < (pkt_len + 4)) {
+	while (pos < (msg.len + 4)) {
 		tag = pkt.readUInt8(pos); pos += 1;
 		tag_len = decode_varlen(pkt.slice(pos, pos + 2));
 		(tag_len < 128) ? pos += 1 : pos += 2;
@@ -133,27 +102,15 @@ function decode_pkt(pkt) {
 		}
 	}
 
-	return (msg);
-}
+	// pos should equal message payload length plus header length
+	assert.equal(pos, msg.len + 4, 'only checksum left')
+	msg.checksum = pkt.readUInt32LE(pos); pos += 4;
+	msg._offset = pos;
 
-function gen_msg(conf) {
-	var msg = {};
-	switch (conf.type) {
-	case ('discover'):
-		msg.type = types.disc_req;
-		msg.device_type = dev_values.device_type_tuner;
-		msg.device_id = conf.device_id || dev_values.device_id_any;
-		return (msg);
-	case ('getset'):
-		msg.type = types.getset_req;
-		msg.getset_name = conf.get || conf.set;
-		if (conf.set)
-			msg.getset_value = conf.value;
+	if (msg.checksum !== crc.unsigned(pkt.slice(0, pkt.length - 4)))
+		throw new Error('decode crc error');
 
-		return (msg);
-	default:
-		throw new Error('unsupported message type');
-	}
+	return (true);
 }
 
 function encode_varlen(length) {
@@ -195,6 +152,8 @@ function decode_varlen(varlen) {
 
 
 function encode_tlv(tlv_obj, buf, offset) {
+	var tags = proto.tags;
+
 	// write the tag
 	buf.writeUInt8(tags[tlv_obj.tag].value, offset);  offset += 1;
 
@@ -217,7 +176,8 @@ function encode_tlv(tlv_obj, buf, offset) {
 		break;
 	case (tags.getset_name.value):
 	case (tags.getset_value.value):
-		var tmpbuf = new Buffer(tlv_obj.value, 'ascii');
+		var buf1 = new Buffer(tlv_obj.value, 'ascii');
+		var tmpbuf = Buffer.concat([buf1, new Buffer('\0')]);
 		var tmplen = tmpbuf.length;
 		var varlen = encode_varlen(tmplen);
 		tmpbuf = Buffer.concat([varlen, tmpbuf]);

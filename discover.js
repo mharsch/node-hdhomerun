@@ -1,5 +1,6 @@
 var dgram = require('dgram');
-var proto = require('./protocol.js');
+var proto = require('./protocol');
+var util = require('util');
 
 module.exports = function (search_id, cb) {
 	if ((arguments.length == 1) && (typeof (search_id) == 'function')) {
@@ -20,9 +21,10 @@ module.exports = function (search_id, cb) {
 	var timer;
 
 	var sock = dgram.createSocket('udp4', function (pkt, remote) {
-		disc_obj = proto.decode_pkt(pkt);
-		// XXX: add error checking
-
+		var disc_obj = {};
+		if (!proto.decode_pkt(pkt, disc_obj)) {
+			console.log('bogus reply message');
+		}
 		delete disc_obj.type;
 
 		disc_obj.device_ip = remote.address;
@@ -47,8 +49,13 @@ module.exports = function (search_id, cb) {
 		cb(err, found);
 	}, 500);
 
-	disc_msg = proto.gen_msg({type: 'discover', device_id:
-	    parseInt(search_id, 16)});
+	disc_msg = {
+		type: proto.types.disc_req,
+		device_type: proto.dev_values.device_type_tuner,
+		device_id: (search_id) ? parseInt(search_id, 16) :
+                    proto.dev_values.device_id_any
+	};
+
 	disc_pkt = proto.encode_msg(disc_msg);
 
 	sock.on('listening', function () {

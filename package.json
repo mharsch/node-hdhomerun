@@ -1,6 +1,6 @@
 {
   "name": "hdhomerun",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "low-level control of HDHomeRun TV tuner devices",
   "main": "index.js",
   "directories": {
@@ -20,7 +20,7 @@
     "nodeunit": ">=0.7.4"
   },
   "scripts": {
-    "test": "nodeunit ./test/test-discover.js ./test/test-device.js"
+    "test": "nodeunit ./test/"
   },
   "repository": {
     "type": "git",

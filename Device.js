@@ -1,7 +1,7 @@
 var net = require('net');
 var util = require('util');
 var events = require('events');
-var proto = require('./protocol.js');
+var proto = require('./protocol');
 
 module.exports = Device;
 
@@ -19,29 +19,31 @@ function Device(conf) {
 		self.emit('connected');
 	});
 
-	this.control_sock.on('readable', function () {
-		var buf, msg, item, cb, err;
-		while ((buf = self.control_sock.read()) !== null) {
-			msg = proto.decode_pkt(buf);
-			if (msg.error_message)
-				err = new Error(msg.error_message);
+	this.request_encoder = new proto.RequestEncoder();
+	this.reply_decoder = new proto.ReplyDecoder();
 
-			if (self.backlog.length > 0) {
-				item = self.backlog.shift();
-				cb = item.callback;
-				clearTimeout(item.timeout);
-				cb(err, {name: msg.getset_name,
-				    value: msg.getset_value});
-			} else {
-				console.log('unexpected packet: ' +
-				    util.inspect(msg));
-			}
+	this.request_encoder.pipe(this.control_sock);
+	this.control_sock.pipe(this.reply_decoder);
+
+	this.reply_decoder.on('reply', function onReply(msg) {
+		var buf, item, cb, err;
+		if (msg.error_message)
+			err = new Error(msg.error_message);
+
+		if (self.backlog.length > 0) {
+			item = self.backlog.shift();
+			cb = item.callback;
+			clearTimeout(item.timeout);
+			cb(err, {name: msg.getset_name,
+			    value: msg.getset_value});
+		} else {
+			console.log('unexpected reply');
 		}
 	});
 
 	this.on('CTS', function () {
 		if (self.backlog.length > 0) {
-			self.control_sock.write(self.backlog[0].packet);
+			self.request_encoder.send(self.backlog[0].request);
 		} else {
 			console.log('CTS with empty backlog');
 		}
@@ -66,16 +68,19 @@ function get_set(name, value, cb) {
 		which = 'get';
 	}
 
-	var body = (which === 'set') ? {set: name, value: value} : {get: name};
-	body.type = 'getset';
+	var msg = {
+		type: proto.types.getset_req,
+		getset_name: name
+	};
 
-	msg = proto.gen_msg(body);
-	pkt = proto.encode_msg(msg);
+	if (which == 'set')
+		msg.getset_value = value;
 
-	this._request(pkt, cb);
+
+	this._request(msg, cb);
 }
 
-Device.prototype._request = function (pkt, cb) {
+Device.prototype._request = function (msg, cb) {
 	var self = this;
 	var to = setTimeout(function () {
 		var unanswered = self.backlog.shift();
@@ -86,7 +91,7 @@ Device.prototype._request = function (pkt, cb) {
 			self.emit('CTS');
 	}, 2500);
 
-	this.backlog.push({packet: pkt, callback: cb, timeout: to});
+	this.backlog.push({request: msg, callback: cb, timeout: to});
 
 	if (this.backlog.length === 1)
 		this.emit('CTS');
