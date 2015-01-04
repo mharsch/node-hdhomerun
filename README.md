@@ -14,7 +14,7 @@ var hdhr = require('hdhomerun');
 
 hdhr.discover(function (err, res) {
 	console.log(res);
-};
+});
 > [ { device_id: '1038A145',
 device_type: 'tuner',
 tuner_count: 2,
@@ -31,7 +31,7 @@ Using the device object, you can get and set named control variables:
 ```javascript
 device.get('/sys/model', function (err, res) {
 	console.log(res);
-}
+});
 > { name: '/sys/model', value: 'hdhomerun3_atsc' }
 ```
 
@@ -39,7 +39,7 @@ Control variables are used to interact with the device.  Most importantly, they 
 ```javascript
 device.set('/tuner0/channel', 'auto:9', function (err, res) {
 	console.log(res);
-}
+});
 > { name: '/tuner0/channel', value: 'auto:9' }
 
 device.get('/tuner0/streaminfo', ...
